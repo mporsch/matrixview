@@ -7,10 +7,8 @@
 #ifdef __linux__
 # include <sys/ioctl.h>
 # include <unistd.h>
-#elif _WIN32
-# error platform not implemented yet
 #else
-# error platform not supported
+# error platform not implemented yet
 #endif
 
 namespace constants {
@@ -30,18 +28,36 @@ struct Droplet {
   unsigned short y;
 };
 
-winsize getTerminalSize() {
-  winsize size;
-  ::ioctl(STDOUT_FILENO, TIOCGWINSZ, &size);
-  return size;
-}
+struct TerminalSize {
+  unsigned short width;
+  unsigned short height;
+};
 
-std::vector<Droplet> getRandomDroplets() {
+namespace unix {
+  TerminalSize GetTerminalSize() {
+    winsize size;
+    ::ioctl(STDOUT_FILENO, TIOCGWINSZ, &size);
+    return TerminalSize{size.ws_col, size.ws_row};
+  }
+
+  void ClearTerminal() {
+    // CSI[2J clears screen, CSI[H moves the cursor to top-left corner
+    std::cout << "\x1B[2J\x1B[H";
+  }
+} // namespace unix
+
+#ifdef __linux__
+  using namespace unix;
+#else
+# error platform not implemented yet
+#endif
+
+std::vector<Droplet> GetRandomDroplets() {
   std::vector<Droplet> randomDroplets(constants::dropletCount);
 
-  auto const terminalSize = getTerminalSize();
-  std::uniform_int_distribution<unsigned short> distributionX(0, terminalSize.ws_col);
-  std::uniform_int_distribution<unsigned short> distributionY(0, terminalSize.ws_row);
+  auto const terminalSize = GetTerminalSize();
+  std::uniform_int_distribution<unsigned short> distributionX(0, terminalSize.width);
+  std::uniform_int_distribution<unsigned short> distributionY(0, terminalSize.height);
   auto gen = [&]() -> Droplet {
       return Droplet{distributionX(generator), distributionY(generator)};
     };
@@ -50,40 +66,42 @@ std::vector<Droplet> getRandomDroplets() {
   return randomDroplets;
 }
 
-void updateDroplets(std::vector<Droplet> &droplets) {
-  auto const terminalSize = getTerminalSize();
-  std::uniform_int_distribution<unsigned short> distributionX(0, terminalSize.ws_col);
+void UpdateDroplets(std::vector<Droplet> &droplets) {
+  auto const terminalSize = GetTerminalSize();
+  std::uniform_int_distribution<unsigned short> distributionX(0, terminalSize.width);
   auto gen = [&]() -> Droplet {
       return Droplet{distributionX(generator), 0};
     };
 
   for (auto &&d : droplets) {
+    // move droplet downward
     ++d.y;
-    if (d.y > terminalSize.ws_row) {
+    if (d.y > terminalSize.height) {
+      // recreate droplet at the top
       d = gen();
     }
   }
 }
 
-std::vector<unsigned char> getBuffer() {
-  auto const terminalSize = getTerminalSize();
+std::vector<unsigned char> GetBuffer() {
+  auto const terminalSize = GetTerminalSize();
 
-  std::vector<unsigned char> randomBuffer(terminalSize.ws_row * terminalSize.ws_col, ' ');
+  std::vector<unsigned char> randomBuffer(terminalSize.height * terminalSize.width, ' ');
   return randomBuffer;
 }
 
-void updateBuffer(std::vector<unsigned char> &buffer, std::vector<Droplet> const &droplets) {
-  auto const terminalSize = getTerminalSize();
+void UpdateBuffer(std::vector<unsigned char> &buffer, std::vector<Droplet> const &droplets) {
+  auto const terminalSize = GetTerminalSize();
   std::uniform_int_distribution<unsigned char> distribution(
       constants::asciiMin, constants::asciiMax);
   auto gen = [&]() -> unsigned char {
       return distribution(generator);
     };
 
-  buffer.resize(terminalSize.ws_row * terminalSize.ws_col, ' ');
+  buffer.resize(terminalSize.height * terminalSize.width, ' ');
   for (auto &&d : droplets) {
     try {
-      buffer.at(d.x + d.y * terminalSize.ws_col) = gen();
+      buffer.at(d.x + d.y * terminalSize.width) = gen();
     }
     catch(std::out_of_range &) {
       // ignore this droplet, until it becomes valid again
@@ -91,25 +109,20 @@ void updateBuffer(std::vector<unsigned char> &buffer, std::vector<Droplet> const
   }
 }
 
-void clear() {
-  // CSI[2J clears screen, CSI[H moves the cursor to top-left corner
-  std::cout << "\x1B[2J\x1B[H";
-}
-
 int main(int argc, char **argv) {
-  auto buffer = getBuffer();
-  auto droplets = getRandomDroplets();
+  auto buffer = GetBuffer();
+  auto droplets = GetRandomDroplets();
 
   while(true) {
     // clear and print to console
-    clear();
+    ClearTerminal();
     std::cout.write(
         reinterpret_cast<char const *>(buffer.data()),
         buffer.size());
     std::cout.flush();
 
-    updateDroplets(droplets);
-    updateBuffer(buffer, droplets);
+    UpdateDroplets(droplets);
+    UpdateBuffer(buffer, droplets);
 
     std::this_thread::sleep_for(constants::frameDuration);
   }
