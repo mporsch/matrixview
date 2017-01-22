@@ -4,6 +4,7 @@
 #include <memory>
 #include <iostream>
 #include <thread>
+#include <csignal>
 
 #ifdef __linux__
 # include <sys/ioctl.h>
@@ -172,7 +173,19 @@ void UpdateDroplets(Droplets &droplets) {
   }
 }
 
+void Cleanup(int) {
+  ClearTerminal();
+  ResetTerminalColor();
+  exit(EXIT_SUCCESS);
+}
+
 int main(int argc, char **argv) {
+  // set up Ctrl-C handler
+  if (std::signal(SIGINT, Cleanup)) {
+    std::cerr << "Failed to register signal handler\n";
+    return EXIT_FAILURE;
+  }
+
   auto matrix = GetMatrix();
   auto droplets = GetRandomDroplets();
 
