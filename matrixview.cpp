@@ -14,14 +14,14 @@
 #endif
 
 namespace constants {
-  static size_t const dropletCount = 12;
+  static size_t const dropletCount = 16U;
   static unsigned char const colorDecrement = 8U;
 
   // printable ASCII range
-  static int const asciiMin = 32;
+  static int const asciiMin = 33;
   static int const asciiMax = 126;
 
-  static auto const frameDuration = std::chrono::milliseconds(50);
+  static auto const frameDuration = std::chrono::milliseconds(33);
 } // namespace constants
 
 struct MatrixCharacter {
