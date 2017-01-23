@@ -1,3 +1,4 @@
+#include <string>
 #include <vector>
 #include <algorithm>
 #include <random>
@@ -6,9 +7,11 @@
 #include <thread>
 #include <csignal>
 
-#ifdef __linux__
+#if defined(__linux__)
 # include <sys/ioctl.h>
 # include <unistd.h>
+#elif defined(_WIN32)
+# include "windows.h"
 #else
 # error platform not implemented yet
 #endif
@@ -18,8 +21,8 @@ namespace constants {
   static unsigned char const colorDecrement = 8U;
 
   // printable ASCII range
-  static int const asciiMin = 33;
-  static int const asciiMax = 126;
+  static unsigned char const asciiMin = 33;
+  static unsigned char const asciiMax = 126;
 
   static auto const frameDuration = std::chrono::milliseconds(33);
 } // namespace constants
@@ -49,59 +52,66 @@ struct TerminalSize {
 // globally used random generator
 std::default_random_engine generator;
 
-namespace unix {
-  TerminalSize GetTerminalSize() {
-    winsize size;
-    ::ioctl(STDOUT_FILENO, TIOCGWINSZ, &size);
-    return TerminalSize{size.ws_col, size.ws_row};
-  }
+#if defined(__linux__)
 
-  void ClearTerminal() {
-    // CSI[2J clears screen, CSI[H moves the cursor to top-left corner
-    std::cout << "\x1B[2J\x1B[H";
-  }
+TerminalSize GetTerminalSize() {
+  winsize size;
+  ::ioctl(STDOUT_FILENO, TIOCGWINSZ, &size);
+  return TerminalSize{size.ws_col, size.ws_row};
+}
 
-  std::string HslToRgbGreen(unsigned char lightness) {
-    if (lightness < 128U) {
-      auto const g = static_cast<unsigned char>((lightness / 128.f) * 256U);
-      auto const str = std::to_string(g);
-      return "\x1B[38;2;0;" + str + ";0m";
-    }
-    else {
-      auto const rb = static_cast<unsigned char>(((lightness - 128U) / 128.f) * 256U);
-      auto const str = std::to_string(rb);
-      return "\x1B[38;2;" + str + ";255;" + str + "m";
-    }
-  }
+#elif defined(_WIN32)
 
-  std::unique_ptr<std::vector<std::string>> GetColorLut() {
-    static size_t const size = 256;
-    std::unique_ptr<std::vector<std::string>> ret(new std::vector<std::string>(size));
+TerminalSize GetTerminalSize() {
+  CONSOLE_SCREEN_BUFFER_INFO csbi;
+  GetConsoleScreenBufferInfo(GetStdHandle(STD_OUTPUT_HANDLE), &csbi);
+  return TerminalSize{static_cast<unsigned short>(csbi.srWindow.Right - csbi.srWindow.Left + 1),
+                      static_cast<unsigned short>(csbi.srWindow.Bottom - csbi.srWindow.Top + 1)};
+}
 
-    for (size_t i = 0; i < size; ++i) {
-      ret->at(i) = HslToRgbGreen(static_cast<unsigned char>(i));
-    }
-
-    return ret;
-  }
-
-  void SetTerminalColorGreen(unsigned char lightness) {
-    // static lookup table (created once on startup)
-    static auto const colorLut = GetColorLut();
-
-    std::cout << colorLut->at(lightness);
-  }
-
-  void ResetTerminalColor() {
-    std::cout << "\x1B[0m";
-  }
-} // namespace unix
-
-#ifdef __linux__
-  using namespace unix;
 #else
 # error platform not implemented yet
 #endif
+
+void ClearTerminal() {
+  // CSI[2J clears screen, CSI[H moves the cursor to top-left corner
+  std::cout << "\x1B[2J\x1B[H";
+}
+
+std::string HslToRgbGreen(unsigned char lightness) {
+  if (lightness < 128U) {
+    auto const g = static_cast<unsigned char>((lightness / 128.f) * 256U);
+    auto const str = std::to_string(g);
+    return "\x1B[38;2;0;" + str + ";0m";
+  }
+  else {
+    auto const rb = static_cast<unsigned char>(((lightness - 128U) / 128.f) * 256U);
+    auto const str = std::to_string(rb);
+    return "\x1B[38;2;" + str + ";255;" + str + "m";
+  }
+}
+
+std::unique_ptr<std::vector<std::string>> GetColorLut() {
+  static size_t const size = 256;
+  std::unique_ptr<std::vector<std::string>> ret(new std::vector<std::string>(size));
+
+  for (size_t i = 0; i < size; ++i) {
+    ret->at(i) = HslToRgbGreen(static_cast<unsigned char>(i));
+  }
+
+  return ret;
+}
+
+void SetTerminalColorGreen(unsigned char lightness) {
+  // static lookup table (created once on startup)
+  static auto const colorLut = GetColorLut();
+
+  std::cout << colorLut->at(lightness);
+}
+
+void ResetTerminalColor() {
+  std::cout << "\x1B[0m";
+}
 
 Matrix GetMatrix() {
   auto const terminalSize = GetTerminalSize();
@@ -110,7 +120,7 @@ Matrix GetMatrix() {
 
 void UpdateMatrix(Matrix &matrix, Droplets const &droplets) {
   auto const terminalSize = GetTerminalSize();
-  std::uniform_int_distribution<unsigned char> distribution(
+  std::uniform_int_distribution<> distribution(
       constants::asciiMin, constants::asciiMax);
   auto gen = [&]() -> unsigned char {
       return distribution(generator);
