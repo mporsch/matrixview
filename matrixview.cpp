@@ -2,6 +2,7 @@
 #include <csignal>
 #include <iostream>
 #include <random>
+#include <sstream>
 #include <string>
 #include <thread>
 #include <vector>
@@ -73,9 +74,9 @@ TerminalSize GetTerminalSize() {
 # error platform not implemented yet
 #endif
 
-void ClearTerminal() {
+void ClearTerminal(std::ostream& os) {
   // CSI[2J clears screen, CSI[H moves the cursor to top-left corner
-  std::cout << "\x1B[2J\x1B[H";
+  os << "\x1B[2J\x1B[H";
 }
 
 std::string HslToRgbGreen(unsigned char lightness) {
@@ -102,7 +103,7 @@ std::vector<std::string> GetColorLut() {
   return ret;
 }
 
-void SetTerminalColorGreen(unsigned char lightness) {
+void SetTerminalColorGreen(std::ostream& os, unsigned char lightness) {
   // save some unneeded color outputs
   static unsigned char prevLightness = lightness;
   if (prevLightness == lightness)
@@ -112,11 +113,11 @@ void SetTerminalColorGreen(unsigned char lightness) {
   // static lookup table (created once on startup)
   static auto const colorLut = GetColorLut();
 
-  std::cout << colorLut.at(lightness);
+  os << colorLut.at(lightness);
 }
 
-void ResetTerminalColor() {
-  std::cout << "\x1B[0m";
+void ResetTerminalColor(std::ostream& os) {
+  os << "\x1B[0m";
 }
 
 Matrix GetMatrix() {
@@ -190,8 +191,8 @@ void UpdateDroplets(Droplets &droplets) {
 }
 
 void Cleanup(int) {
-  ClearTerminal();
-  ResetTerminalColor();
+  ClearTerminal(std::cout);
+  ResetTerminalColor(std::cout);
   exit(EXIT_SUCCESS);
 }
 
@@ -207,12 +208,14 @@ int main(int, char **) {
 
   while(true) {
     // clear and print to console
-    ClearTerminal();
+    ClearTerminal(std::cout);
 
+    std::ostringstream oss;
     for (auto &&m : matrix) {
-      SetTerminalColorGreen(m.color);
-      std::cout << m.symbol;
+      SetTerminalColorGreen(oss, m.color);
+      oss << m.symbol;
     }
+    std::cout << oss.str();
     std::cout.flush();
 
     UpdateDroplets(droplets);
