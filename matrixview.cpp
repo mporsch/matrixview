@@ -1,11 +1,10 @@
-#include <string>
-#include <vector>
 #include <algorithm>
-#include <random>
-#include <memory>
-#include <iostream>
-#include <thread>
 #include <csignal>
+#include <iostream>
+#include <random>
+#include <string>
+#include <thread>
+#include <vector>
 
 #if defined(__linux__)
 # include <sys/ioctl.h>
@@ -17,18 +16,18 @@
 #endif
 
 namespace constants {
-  static size_t const dropletCount = 16U;
-  static unsigned char const colorDecrement = 8U;
+  constexpr size_t dropletCount = 16U;
+  constexpr unsigned char colorDecrement = 8U;
 
   // printable ASCII range
-  static unsigned char const asciiMin = 33;
-  static unsigned char const asciiMax = 126;
+  constexpr char asciiMin = 33;
+  constexpr char asciiMax = 126;
 
-  static auto const frameDuration = std::chrono::milliseconds(33);
+  constexpr auto frameDuration = std::chrono::milliseconds(33);
 } // namespace constants
 
 struct MatrixCharacter {
-  unsigned char symbol;
+  char symbol;
   unsigned char color;
 
   MatrixCharacter()
@@ -50,7 +49,7 @@ struct TerminalSize {
 };
 
 // globally used random generator
-std::default_random_engine generator;
+static std::default_random_engine generator;
 
 #if defined(__linux__)
 
@@ -65,8 +64,9 @@ TerminalSize GetTerminalSize() {
 TerminalSize GetTerminalSize() {
   CONSOLE_SCREEN_BUFFER_INFO csbi;
   GetConsoleScreenBufferInfo(GetStdHandle(STD_OUTPUT_HANDLE), &csbi);
-  return TerminalSize{static_cast<unsigned short>(csbi.srWindow.Right - csbi.srWindow.Left + 1),
-                      static_cast<unsigned short>(csbi.srWindow.Bottom - csbi.srWindow.Top + 1)};
+  return TerminalSize{
+    static_cast<unsigned short>(csbi.srWindow.Right - csbi.srWindow.Left + 1),
+    static_cast<unsigned short>(csbi.srWindow.Bottom - csbi.srWindow.Top + 1)};
 }
 
 #else
@@ -91,12 +91,12 @@ std::string HslToRgbGreen(unsigned char lightness) {
   }
 }
 
-std::unique_ptr<std::vector<std::string>> GetColorLut() {
+std::vector<std::string> GetColorLut() {
   static size_t const size = 256;
-  std::unique_ptr<std::vector<std::string>> ret(new std::vector<std::string>(size));
+  std::vector<std::string> ret(size);
 
   for (size_t i = 0; i < size; ++i) {
-    ret->at(i) = HslToRgbGreen(static_cast<unsigned char>(i));
+    ret.at(i) = HslToRgbGreen(static_cast<unsigned char>(i));
   }
 
   return ret;
@@ -106,7 +106,7 @@ void SetTerminalColorGreen(unsigned char lightness) {
   // static lookup table (created once on startup)
   static auto const colorLut = GetColorLut();
 
-  std::cout << colorLut->at(lightness);
+  std::cout << colorLut.at(lightness);
 }
 
 void ResetTerminalColor() {
@@ -120,11 +120,11 @@ Matrix GetMatrix() {
 
 void UpdateMatrix(Matrix &matrix, Droplets const &droplets) {
   auto const terminalSize = GetTerminalSize();
-  std::uniform_int_distribution<> distribution(
-      constants::asciiMin, constants::asciiMax);
-  auto gen = [&]() -> unsigned char {
-      return distribution(generator);
-    };
+  static std::uniform_int_distribution<> distribution(
+    constants::asciiMin, constants::asciiMax);
+  auto gen = [&]() -> char {
+    return static_cast<char>(distribution(generator));
+  };
 
   // handle window resize
   matrix.resize(terminalSize.height * terminalSize.width);
@@ -159,8 +159,8 @@ Droplets GetRandomDroplets() {
   std::uniform_int_distribution<unsigned short> distributionX(0, terminalSize.width);
   std::uniform_int_distribution<unsigned short> distributionY(0, terminalSize.height);
   auto gen = [&]() -> Droplet {
-      return Droplet{distributionX(generator), distributionY(generator)};
-    };
+    return Droplet{distributionX(generator), distributionY(generator)};
+  };
   std::generate(begin(randomDroplets), end(randomDroplets), gen);
 
   return randomDroplets;
@@ -170,8 +170,8 @@ void UpdateDroplets(Droplets &droplets) {
   auto const terminalSize = GetTerminalSize();
   std::uniform_int_distribution<unsigned short> distributionX(0, terminalSize.width);
   auto gen = [&]() -> Droplet {
-      return Droplet{distributionX(generator), 0};
-    };
+    return Droplet{distributionX(generator), 0};
+  };
 
   for (auto &&d : droplets) {
     // move droplet downward
@@ -189,7 +189,7 @@ void Cleanup(int) {
   exit(EXIT_SUCCESS);
 }
 
-int main(int argc, char **argv) {
+int main(int, char **) {
   // set up Ctrl-C handler
   if (std::signal(SIGINT, Cleanup)) {
     std::cerr << "Failed to register signal handler\n";
