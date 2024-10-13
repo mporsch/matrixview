@@ -103,6 +103,12 @@ std::vector<std::string> GetColorLut() {
 }
 
 void SetTerminalColorGreen(unsigned char lightness) {
+  // save some unneeded color outputs
+  static unsigned char prevLightness = lightness;
+  if (prevLightness == lightness)
+    return;
+  prevLightness = lightness;
+
   // static lookup table (created once on startup)
   static auto const colorLut = GetColorLut();
 
