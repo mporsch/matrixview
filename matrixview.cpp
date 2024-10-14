@@ -84,12 +84,12 @@ void ClearTerminal(std::ostream& os) {
 
 std::string HslToRgbGreen(unsigned char lightness) {
   if (lightness < 128U) {
-    auto const g = static_cast<unsigned char>((lightness / 128.f) * 256U);
+    auto const g = lightness * 2U;
     auto const str = std::to_string(g);
     return "\x1B[38;2;0;" + str + ";0m";
   }
   else {
-    auto const rb = static_cast<unsigned char>(((lightness - 128U) / 128.f) * 256U);
+    auto const rb = (lightness - 128U) * 2U;
     auto const str = std::to_string(rb);
     return "\x1B[38;2;" + str + ";255;" + str + "m";
   }
@@ -132,7 +132,7 @@ void UpdateMatrix(Matrix &matrix, Droplets const &droplets) {
   auto const terminalSize = GetTerminalSize();
   static std::uniform_int_distribution<> distribution(
     constants::asciiMin, constants::asciiMax);
-  auto gen = [&]() -> char {
+  auto gen = []() -> char {
     return static_cast<char>(distribution(generator));
   };
 
