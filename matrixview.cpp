@@ -52,27 +52,30 @@ struct TerminalSize {
 // globally used random generator
 static std::default_random_engine generator;
 
-#if defined(__linux__)
-
 TerminalSize GetTerminalSize() {
+#if defined(__linux__)
   winsize size;
   ::ioctl(STDOUT_FILENO, TIOCGWINSZ, &size);
   return TerminalSize{size.ws_col, size.ws_row};
-}
-
 #elif defined(_WIN32)
-
-TerminalSize GetTerminalSize() {
   CONSOLE_SCREEN_BUFFER_INFO csbi;
   GetConsoleScreenBufferInfo(GetStdHandle(STD_OUTPUT_HANDLE), &csbi);
   return TerminalSize{
     static_cast<unsigned short>(csbi.srWindow.Right - csbi.srWindow.Left + 1),
     static_cast<unsigned short>(csbi.srWindow.Bottom - csbi.srWindow.Top + 1)};
-}
-
 #else
 # error platform not implemented yet
 #endif
+}
+
+void InitTerminal() {
+#if defined(_WIN32)
+  auto handle = GetStdHandle(STD_OUTPUT_HANDLE);
+  DWORD mode = 0;
+  GetConsoleMode(handle, &mode) &&
+    SetConsoleMode(handle, mode | ENABLE_VIRTUAL_TERMINAL_PROCESSING);
+#endif
+}
 
 void ClearTerminal(std::ostream& os) {
   // CSI[2J clears screen, CSI[H moves the cursor to top-left corner
@@ -202,6 +205,8 @@ int main(int, char **) {
     std::cerr << "Failed to register signal handler\n";
     return EXIT_FAILURE;
   }
+
+  InitTerminal();
 
   auto matrix = GetMatrix();
   auto droplets = GetRandomDroplets();
